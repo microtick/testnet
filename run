@@ -1,0 +1,186 @@
+#!/bin/bash
+
+CHAINID_MTM=$(jq -r .chain_id microtick.json)
+CHAINID_GAIAD=$(jq -r .chain_id gaiad.json)
+
+DATA=$PWD/data
+KEYS=$PWD/keys.json
+
+SILENT=1
+redirect() {
+  if [ "$SILENT" -eq 1 ]; then
+    "$@" > /dev/null 2>&1
+  else
+    "$@"
+  fi
+}
+
+echo "=========================="
+echo "Configuring new test setup"
+echo "=========================="
+echo
+
+# Display software version for testers
+GAIA_VERSION=`gaiad version`
+echo "GAIA VERSION INFO: $GAIA_VERSION"
+MTM_VERSION=`mtm version`
+echo "MICROTICK VERSION INFO: $MTM_VERSION"
+echo
+
+# Ensure user understands what will be deleted
+if [[ -d $DATA ]] && [[ ! "$1" == "skip" ]]; then
+  echo "$(basename $0) will delete:"
+  echo
+  echo "- $HOME/.relayer"
+  echo "- $DATA"
+  echo "- $KEYS"
+  echo
+  read -p "Do you wish to continue? (y/n): " -n 1 -r
+  echo
+  if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+      exit 1
+  fi
+  echo
+fi
+
+echo "Stopping running processes"
+echo "--------------------------"
+
+redirect killall gaiad 
+redirect killall mtm 
+
+# Delete data from old runs
+redirect rm -rf $CHAIN_DATA 
+redirect rm -rf $HOME/.relayer 
+redirect rm -rf ./relayer
+
+# Setup chains
+echo
+echo "Chains"
+echo "------"
+
+# Gaiad
+node setup-chain.js $DATA ./gaiad.json
+if [ $? -ne 0 ]; then
+  exit -1
+fi
+node seal-chain.js $DATA ./gaiad.json
+if [ $? -ne 0 ]; then
+  exit -1
+fi
+setsid gaiad start --home $DATA/gaiad > /dev/null 2>&1 &
+echo
+
+# Microtick
+node setup-chain.js $DATA ./microtick.json
+if [ $? -ne 0 ]; then
+  exit -1
+fi
+node seal-chain.js $DATA ./microtick.json
+if [ $? -ne 0 ]; then
+  exit -1
+fi
+setsid mtm start --home $DATA/mtm > /dev/null 2>&1 &
+echo
+
+# Governance
+
+echo "Governance"
+echo "----------"
+
+echo "Letting chains stabilize..."
+sleep 15
+
+# backing change
+echo "Submitting backing change proposal..."
+echo $ mtm tx gov submit-proposal microtick-denom-change --title "New backing proposal" --description "Use hub backing" ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2 --home ./data/mtm --from governance --keyring-backend test --chain-id $CHAINID_MTM --deposit 10000000stake -y 
+redirect mtm tx gov submit-proposal microtick-denom-change --title "New backing proposal" --description "Use hub backing" ibc/27394FB092D2ECCD56123C74F36E4C1F926001CEADA9CA97EA622B25F41E5EB2 --home ./data/mtm --from governance --keyring-backend test --chain-id $CHAINID_MTM --deposit 10000000stake -y 
+echo "Voting yes on backing change proposal..."
+echo $ mtm tx gov vote 1 yes --from validator --home ./data/mtm --keyring-backend test --chain-id $CHAINID_MTM -y
+redirect mtm tx gov vote 1 yes --from validator --home ./data/mtm --keyring-backend test --chain-id $CHAINID_MTM -y
+# create markets
+echo "Submitting add markets proposal..."
+echo $ mtm tx gov submit-proposal microtick-add-markets --proposal ./add-market-proposal.json --home ./data/mtm --from governance --keyring-backend test --chain-id $CHAINID_MTM --deposit 10000000stake -y
+redirect mtm tx gov submit-proposal microtick-add-markets --proposal ./add-market-proposal.json --home ./data/mtm --from governance --keyring-backend test --chain-id $CHAINID_MTM --deposit 10000000stake -y
+echo "Voting yes on add markets proposal..."
+echo $ mtm tx gov vote 2 yes --from validator --home ./data/mtm --keyring-backend test --chain-id $CHAINID_MTM -y
+redirect mtm tx gov vote 2 yes --from validator --home ./data/mtm --keyring-backend test --chain-id $CHAINID_MTM -y
+
+# Relayer
+sleep 10
+
+echo
+echo "Relayer"
+echo "-------"
+
+mkdir -p ./relayer/chains
+mkdir -p ./relayer/paths
+
+cat <<- EOF > ./relayer/chains/gaiad.json
+{
+  "key": "testkey",
+  "chain-id": "$CHAINID_GAIAD",
+  "rpc-addr": "http://localhost:26557",
+  "account-prefix": "cosmos",
+  "gas-adjustment": 1.5,
+  "gas-prices": "0.025stake",
+  "trusting-period": "336h"
+}
+EOF
+
+cat <<- EOF > ./relayer/chains/microtick.json
+{
+  "key": "testkey",
+  "chain-id": "$CHAINID_MTM",
+  "rpc-addr": "http://localhost:26657",
+  "account-prefix": "micro",
+  "gas-adjustment": 1.5,
+  "gas-prices": "0.025stake",
+  "trusting-period": "336h"
+}
+EOF
+
+cat <<- EOF > ./relayer/paths/microtick-ibc.json
+{
+  "src": {
+    "chain-id": "$CHAINID_GAIAD",
+    "client-id": "",
+    "connection-id": "",
+    "channel-id": "",
+    "port-id": "transfer",
+    "order": "unordered",
+    "version": "ics20-1"
+  },
+  "dst": {
+    "chain-id": "$CHAINID_MTM",
+    "client-id": "",
+    "connection-id": "",
+    "channel-id": "",
+    "port-id": "transfer",
+    "order": "unordered",
+    "version": "ics20-1"
+  },
+  "strategy": {
+    "type": "naive"
+  }
+}
+EOF
+
+rly config init
+rly config add-chains ./relayer/chains
+
+GAIAD_MNEMONIC=$(jq -r '."'$CHAINID_GAIAD'".relayer.mnemonic' ./keys.json)
+echo "Importing key $(rly keys restore $CHAINID_GAIAD testkey "$GAIAD_MNEMONIC")"
+
+MTM_MNEMONIC=$(jq -r '."'$CHAINID_MTM'".relayer.mnemonic' ./keys.json)
+echo "Importing key $(rly keys restore $CHAINID_MTM testkey "$MTM_MNEMONIC")"
+
+echo
+echo "Linking chains"
+echo "--------------"
+rly config add-paths ./relayer/paths
+rly light init $CHAINID_GAIAD -f
+rly light init $CHAINID_MTM -f
+
+rly tx link microtick-ibc --timeout 10s
+rly start microtick-ibc
