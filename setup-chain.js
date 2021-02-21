@@ -73,11 +73,12 @@
   // add keys
   const names = Object.keys(config.accounts)
   for (var i=0; i<names.length; i++) {
-    await addkey(names[i])
-  }
-  
-  // fund accounts
-  for (var i=0; i<names.length; i++) {
+    if (!names[i].startsWith("micro")) {
+      console.log("generating key: " + names[i])
+      await addkey(names[i])
+    }
+    // fund account
+    console.log("funding account: " + names[i] + " " + config.accounts[names[i]])
     await fundAcct(names[i], config.accounts[names[i]])
   }
   

@@ -15,5 +15,5 @@ pkill gaiad
 pkill mtm
 
 redirect gaiad start --home $DATA/gaiad &
-redirect mtm start --home $DATA/microtick &
+redirect mtm start --home $DATA/mtm &
 
