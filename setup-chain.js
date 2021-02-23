@@ -9,14 +9,15 @@
     console.error("Usage: " + 
       path.basename(process.argv[0]) + " " + 
       path.basename(process.argv[1]) + " " +
-      "<home> " +
-      "<config>")
+      "<data_dir> " +
+      "<config_dir>")
     process.exit(-1)
   }
   
-  const HOME=process.argv[2]
+  const DATA=process.argv[2]
   const CONFIG=process.argv[3]
-  const KEYS="./keys.json"
+  const KEYS= DATA + "/keys.json"
+  
   const config = JSON.parse(fs.readFileSync(CONFIG))
   if (fs.existsSync(KEYS)) {
     var keys = JSON.parse(fs.readFileSync(KEYS))
@@ -25,7 +26,7 @@
   }
   keys[config.chain_id] = {}
   
-  const CHAINHOME=HOME + "/" + config.executable
+  const CHAINHOME=DATA + "/" + config.executable
   const NODE=config.executable
   
   console.log()
@@ -71,15 +72,23 @@
   await chainexec("init " + NODE + " --chain-id " + config.chain_id)
   
   // add keys
-  const names = Object.keys(config.accounts)
+  const names = Object.keys(config.keys)
   for (var i=0; i<names.length; i++) {
-    if (!names[i].startsWith("micro")) {
-      console.log("generating key: " + names[i])
-      await addkey(names[i])
-    }
+    //console.log("generating key: " + names[i])
+    await addkey(names[i])
     // fund account
-    console.log("funding account: " + names[i] + " " + config.accounts[names[i]])
-    await fundAcct(names[i], config.accounts[names[i]])
+    //console.log("funding account: " + names[i] + " " + config.keys[names[i]])
+    await fundAcct(names[i], config.keys[names[i]])
+  }
+  
+  // add external accounts
+  if (config.external !== undefined) {
+    const external = Object.keys(config.external)
+    for (i=0; i<external.length; i++) {
+      // fund account
+      //console.log("funding account: " + external[i] + " " + config.external[external[i]])
+      await fundAcct(external[i], config.external[external[i]])
+    }
   }
   
   fs.writeFileSync(KEYS, JSON.stringify(keys, null, 2))

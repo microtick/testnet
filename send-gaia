@@ -1,6 +1,6 @@
 #!/bin/sh
 
-CHAINID_GAIAD=$(jq -r .chain_id gaiad.json)
+CHAINID_GAIAD=$(jq -r .chain_id ./config/gaiad.json)
 
 usage() {
   echo "send [account] [amount]"

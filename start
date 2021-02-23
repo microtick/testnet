@@ -2,18 +2,8 @@
 
 DATA=$PWD/data
 
-SILENT=0
-redirect() {
-  if [ "$SILENT" -eq 1 ]; then
-    "$@" > /dev/null 2>&1
-  else
-    "$@"
-  fi
-}
-
 pkill gaiad
 pkill mtm
 
-redirect gaiad start --home $DATA/gaiad &
-redirect mtm start --home $DATA/mtm &
-
+setsid gaiad start --home $DATA/gaiad > /dev/null 2>&1 &
+setsid mtm start --home $DATA/mtm > /dev/null 2>&1 &

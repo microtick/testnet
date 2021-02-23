@@ -1,9 +1,6 @@
 #!/bin/sh
 
-KEYFILE=./keys.json
+KEYFILE=./data/keys.json
 
-CHAIN=$1
-KEYNAME=$2
-
-address=$(jq -r ".$CHAIN.$KEYNAME.address" $KEYFILE)
-echo "$address"
+KEYNAME=$1
+jq -r ".[].$KEYNAME.address" $KEYFILE

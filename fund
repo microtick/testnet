@@ -3,7 +3,7 @@
 # This script creates an IBC transaction from the "bank" account on the gaiad chain and funds the
 # destination account on the microtick chain with the requested amount of tokens
 
-CHAINID_GAIAD=$(jq -r .chain_id gaiad.json)
+CHAINID_GAIAD=$(jq -r .chain_id ./config/gaiad.json)
 
 usage() {
   echo "fund [account] [amount]"
@@ -31,5 +31,3 @@ redirect() {
 
 echo "Sending tokens over IBC..."
 redirect gaiad tx ibc-transfer transfer transfer channel-0 $ACCOUNT $AMOUNT --from bank --home ./data/gaiad --keyring-backend test --node tcp://localhost:26557 --chain-id $CHAINID_GAIAD -y 
-sleep 10
-#rly tx relay incoming -d
