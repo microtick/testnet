@@ -30,4 +30,4 @@ redirect() {
 }
 
 echo "Sending tokens over IBC..."
-redirect gaiad tx ibc-transfer transfer transfer channel-0 $ACCOUNT $AMOUNT --from bank --home ./data/gaiad --keyring-backend test --node tcp://localhost:26557 --chain-id $CHAINID_GAIAD -y 
+redirect gaiad tx ibc-transfer transfer transfer channel-0 $ACCOUNT $AMOUNT --packet-timeout-timestamp 0 --from bank --home ./data/gaiad --keyring-backend test --node tcp://localhost:26557 --chain-id $CHAINID_GAIAD -y 
